@@ -14,7 +14,7 @@ NodeNavi는 건물 시설 관리와 문제 해결을 돕는 Android 기반 Unity
 
 - Unity 프로젝트의 루트는 `NodeNavi_Unity`이다. Unity 관련 작업은 이 폴더 안에서 수행한다.
 - 새 Unity C# 스크립트는 반드시 `NodeNavi_Unity/Assets/Data/Scripts` 아래에 만든다.
-- Unity에서 사용하는 자료가 아닌 문서, 원본 파일, 참고 자료 등은 별도 경로가 지정되지 않았다면 저장소 루트의 `NodeNavi` 폴더 아래에 둔다.
+- Unity에서 사용하는 자료가 아닌 문서, 원본 파일, 참고 자료 등은 별도 경로가 지정되지 않았다면 저장소 루트, 즉 이 `AGENTS.md`가 있는 `NodeNavi` 프로젝트 폴더에 둔다. 별도의 `NodeNavi` 하위 폴더를 새로 만들지 않는다.
 - Unity가 관리하는 `.meta` 파일은 에셋과 함께 유지한다. `Library`, `Temp`, `Logs`, `obj`, `.vs`는 수정하거나 버전 관리 대상으로 추가하지 않는다.
 - 새로 만드는 Unity C# 스크립트 파일명은 `sh_` 접두사를 사용한다. 클래스 이름도 파일명과 일치시킨다.
 
