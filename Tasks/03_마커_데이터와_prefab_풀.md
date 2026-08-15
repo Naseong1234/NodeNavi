@@ -2,7 +2,7 @@
 
 ## 목표
 
-마커 이름·경로 순서·가상 마커·prefab을 한 데이터 항목으로 묶고, prefab 10개를 앱 시작 시 한 번만 생성해 관리합니다.
+마커 이름·경로 순서·가상 마커·prefab을 한 데이터 항목으로 묶고, prefab 6개를 앱 시작 시 한 번만 생성해 관리합니다.
 
 ## 구현 파일
 
@@ -12,7 +12,7 @@
 ## 작업
 
 1. `markerName`, `routeOrder`, `knownMarkerTransform`, `routePrefab`, `runtimeInstance`를 가진 마커 데이터를 정의합니다.
-2. `MarkerRouteController`가 Inspector의 마커 데이터 10개를 검사하도록 만듭니다.
+2. `MarkerRouteController`가 Inspector의 마커 데이터 6개를 검사하도록 만듭니다.
 3. 이름 중복, 빈 prefab, 빈 Transform, 중복된 `routeOrder`는 Console 오류로 알립니다.
 4. 각 prefab을 `RouteContentRoot` 아래에 한 번만 생성합니다.
 5. 생성 즉시 모든 인스턴스를 비활성화하고 `runtimeInstance`에 보관합니다.
@@ -20,7 +20,7 @@
 
 ## 완료 조건
 
-플레이 중 인스턴스 10개가 단 한 번 생성되며 모두 비활성화되고, 인식 마커 이름이 Console에 출력됩니다.
+플레이 중 인스턴스 6개가 단 한 번 생성되며 모두 비활성화되고, 인식 마커 이름이 Console에 출력됩니다.
 
 ## 다음 Task 전제
 

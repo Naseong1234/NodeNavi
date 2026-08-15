@@ -3254,6 +3254,83 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_AnchorPrefab: {fileID: 0}
+--- !u!1 &810331491
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 810331493}
+  - component: {fileID: 810331492}
+  m_Layer: 0
+  m_Name: Marker Manager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &810331492
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 810331491}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4c86539b0fb34706999f1829d73454ca, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::sh_MarkerRouteController
+  trackedImageManager: {fileID: 809697572}
+  routeContentRoot: {fileID: 1192624480}
+  markerRoutes:
+  - markerName: Marker_01
+    routeOrder: 0
+    knownMarkerTransform: {fileID: 2011969316}
+    routePrefab: {fileID: 5469830579104926923, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+    runtimeInstance: {fileID: 0}
+  - markerName: Marker_02
+    routeOrder: 1
+    knownMarkerTransform: {fileID: 102859929}
+    routePrefab: {fileID: 5469830579104926923, guid: 940f3a5ec891a024cb7d4d13a1725937, type: 3}
+    runtimeInstance: {fileID: 0}
+  - markerName: Marker_03
+    routeOrder: 2
+    knownMarkerTransform: {fileID: 459221024}
+    routePrefab: {fileID: 5469830579104926923, guid: aa7b019acca000943a4b01a29ca726b9, type: 3}
+    runtimeInstance: {fileID: 0}
+  - markerName: Marker_04
+    routeOrder: 3
+    knownMarkerTransform: {fileID: 1815396416}
+    routePrefab: {fileID: 5469830579104926923, guid: 9eb83ea23f3b3fa4982a48c62d07898c, type: 3}
+    runtimeInstance: {fileID: 0}
+  - markerName: Marker_05
+    routeOrder: 4
+    knownMarkerTransform: {fileID: 1766002673}
+    routePrefab: {fileID: 5469830579104926923, guid: cd4688c30448ecc4b90f6906ba3c6585, type: 3}
+    runtimeInstance: {fileID: 0}
+  - markerName: Marker_06
+    routeOrder: 5
+    knownMarkerTransform: {fileID: 184732705}
+    routePrefab: {fileID: 5469830579104926923, guid: 4a222009f3da2ac46afe226a7b84ec81, type: 3}
+    runtimeInstance: {fileID: 0}
+--- !u!4 &810331493
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 810331491}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &824654742
 GameObject:
   m_ObjectHideFlags: 0
@@ -8650,6 +8727,63 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2145223657}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1001 &1717713311656628646
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5469830579104926923, guid: 232e0978e623a944390adf2907f7b075, type: 3}
+      propertyPath: m_Name
+      value: Test Prefab1
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 232e0978e623a944390adf2907f7b075, type: 3}
 --- !u!1001 &1988681413845730723
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -8784,3 +8918,5 @@ SceneRoots:
   - {fileID: 495300349}
   - {fileID: 624171208}
   - {fileID: 659457231}
+  - {fileID: 810331493}
+  - {fileID: 1717713311656628646}
