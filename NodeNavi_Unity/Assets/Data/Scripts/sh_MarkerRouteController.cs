@@ -6,13 +6,17 @@ using UnityEngine.XR.ARSubsystems;
 public class sh_MarkerRouteController : MonoBehaviour
 {
     private const int RequiredMarkerCount = 6;
+    private const int MaxVisibleRouteCount = 3;
 
     [SerializeField] private ARTrackedImageManager trackedImageManager;
+    [SerializeField] private Transform buildingContentRoot;
     [SerializeField] private Transform routeContentRoot;
     [SerializeField] private List<sh_MarkerRouteData> markerRoutes = new List<sh_MarkerRouteData>(RequiredMarkerCount);
+    [SerializeField] private int editorTestRouteOrder;
 
     private bool isSubscribed;
     private bool isInitialized;
+    private bool hasAlignedBuildingRoot;
 
     private void Awake()
     {
@@ -55,6 +59,12 @@ public class sh_MarkerRouteController : MonoBehaviour
         if (trackedImageManager == null)
         {
             Debug.LogError("[sh_MarkerRouteController] AR Tracked Image Manager 참조가 비어 있습니다.", this);
+            return false;
+        }
+
+        if (buildingContentRoot == null)
+        {
+            Debug.LogError("[sh_MarkerRouteController] Building Content Root 참조가 비어 있습니다.", this);
             return false;
         }
 
@@ -149,11 +159,11 @@ public class sh_MarkerRouteController : MonoBehaviour
 
     private void OnTrackedImagesChanged(ARTrackedImagesChangedEventArgs eventArgs)
     {
-        LogTrackedImages(eventArgs.added, "added");
-        LogTrackedImages(eventArgs.updated, "updated");
+        HandleTrackedImages(eventArgs.added, "added");
+        HandleTrackedImages(eventArgs.updated, "updated");
     }
 
-    private void LogTrackedImages(IReadOnlyList<ARTrackedImage> trackedImages, string source)
+    private void HandleTrackedImages(IReadOnlyList<ARTrackedImage> trackedImages, string source)
     {
         for (int index = 0; index < trackedImages.Count; index++)
         {
@@ -161,7 +171,83 @@ public class sh_MarkerRouteController : MonoBehaviour
             if (trackedImage == null || trackedImage.trackingState != TrackingState.Tracking)
                 continue;
 
-            Debug.Log($"[sh_MarkerRouteController] trackedImagesChanged {source}: {trackedImage.referenceImage.name}", trackedImage.gameObject);
+            string markerName = trackedImage.referenceImage.name;
+            if (!TryGetRouteData(markerName, out sh_MarkerRouteData routeData))
+            {
+                Debug.LogWarning($"[sh_MarkerRouteController] 마커 데이터와 일치하지 않는 이미지 이름입니다: {markerName}", trackedImage.gameObject);
+                continue;
+            }
+
+            if (!hasAlignedBuildingRoot)
+                AlignBuildingContentRoot(trackedImage.transform, routeData);
+
+            SetActiveRoutes(routeData.RouteOrder);
+            Debug.Log($"[sh_MarkerRouteController] trackedImagesChanged {source}: {markerName}, routeOrder={routeData.RouteOrder}", trackedImage.gameObject);
         }
+    }
+
+    private void AlignBuildingContentRoot(Transform trackedMarkerTransform, sh_MarkerRouteData routeData)
+    {
+        Vector3 knownMarkerLocalPosition = routeData.KnownMarkerTransform.localPosition;
+        Quaternion knownMarkerLocalRotation = routeData.KnownMarkerTransform.localRotation;
+
+        Quaternion rootRotation = trackedMarkerTransform.rotation * Quaternion.Inverse(knownMarkerLocalRotation);
+        Vector3 rootPosition = trackedMarkerTransform.position - (rootRotation * knownMarkerLocalPosition);
+
+        buildingContentRoot.SetPositionAndRotation(rootPosition, rootRotation);
+        hasAlignedBuildingRoot = true;
+
+        Debug.Log($"[sh_MarkerRouteController] 첫 마커 정렬 완료: {routeData.MarkerName}", buildingContentRoot.gameObject);
+    }
+
+    public void SetActiveRoutes(int currentRouteOrder)
+    {
+        if (!isInitialized)
+            return;
+
+        if (currentRouteOrder < 0 || currentRouteOrder >= RequiredMarkerCount)
+        {
+            Debug.LogWarning($"[sh_MarkerRouteController] currentRouteOrder는 0부터 {RequiredMarkerCount - 1} 사이여야 합니다: {currentRouteOrder}", this);
+            return;
+        }
+
+        int minRouteOrder = Mathf.Max(0, currentRouteOrder - (MaxVisibleRouteCount - 1));
+
+        for (int index = 0; index < markerRoutes.Count; index++)
+        {
+            sh_MarkerRouteData routeData = markerRoutes[index];
+            if (routeData.RuntimeInstance == null)
+                continue;
+
+            bool shouldBeActive = routeData.RouteOrder >= minRouteOrder && routeData.RouteOrder <= currentRouteOrder;
+            routeData.RuntimeInstance.SetActive(shouldBeActive);
+        }
+    }
+
+    [ContextMenu("Task04/Test Current Route Order")]
+    private void TestEditorRouteOrder()
+    {
+        SetActiveRoutes(editorTestRouteOrder);
+        Debug.Log($"[sh_MarkerRouteController] Editor 테스트 routeOrder={editorTestRouteOrder}", this);
+    }
+
+    public void RunEditorRouteOrderTest()
+    {
+        TestEditorRouteOrder();
+    }
+
+    private bool TryGetRouteData(string markerName, out sh_MarkerRouteData routeData)
+    {
+        for (int index = 0; index < markerRoutes.Count; index++)
+        {
+            if (markerRoutes[index].MarkerName == markerName)
+            {
+                routeData = markerRoutes[index];
+                return true;
+            }
+        }
+
+        routeData = null;
+        return false;
     }
 }

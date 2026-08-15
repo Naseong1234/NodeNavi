@@ -3284,6 +3284,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::sh_MarkerRouteController
   trackedImageManager: {fileID: 809697572}
+  buildingContentRoot: {fileID: 624171208}
   routeContentRoot: {fileID: 1192624480}
   markerRoutes:
   - markerName: Marker_01
@@ -3316,6 +3317,7 @@ MonoBehaviour:
     knownMarkerTransform: {fileID: 184732705}
     routePrefab: {fileID: 5469830579104926923, guid: 4a222009f3da2ac46afe226a7b84ec81, type: 3}
     runtimeInstance: {fileID: 0}
+  editorTestRouteOrder: 2
 --- !u!4 &810331493
 Transform:
   m_ObjectHideFlags: 0
@@ -8727,63 +8729,6 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2145223657}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
---- !u!1001 &1717713311656628646
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5382502479337248877, guid: 232e0978e623a944390adf2907f7b075, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5469830579104926923, guid: 232e0978e623a944390adf2907f7b075, type: 3}
-      propertyPath: m_Name
-      value: Test Prefab1
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 232e0978e623a944390adf2907f7b075, type: 3}
 --- !u!1001 &1988681413845730723
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -8919,4 +8864,3 @@ SceneRoots:
   - {fileID: 624171208}
   - {fileID: 659457231}
   - {fileID: 810331493}
-  - {fileID: 1717713311656628646}
