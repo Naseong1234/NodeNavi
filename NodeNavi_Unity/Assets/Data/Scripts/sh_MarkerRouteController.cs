@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using TMPro;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
@@ -22,11 +23,22 @@ public class sh_MarkerRouteController : MonoBehaviour
     [SerializeField] private Vector3 wallMarkerOffsetEuler = new Vector3(90f, 0f, 0f);
 
     [Header("보정 및 정렬 설정")]
-    [Tooltip("재인식 시 위치/회전을 부드럽게 보간할지 여부입니다. 끄면 즉시 위치가 맞추어집니다.")]
-    [SerializeField] private bool useSmoothInterpolation = false;
+    [Tooltip("재인식 시 위치/회전을 부드럽게 보간할지 여부입니다. 일반 오차에서는 켜 두는 것을 권장합니다.")]
+    [SerializeField] private bool useSmoothInterpolation = true;
     [SerializeField] private float interpolationSpeed = 10f;
+    [SerializeField] private float poseStableDuration = 0.3f;
     [SerializeField] private float minPositionThreshold = 0.005f; // 5mm
     [SerializeField] private float minRotationThreshold = 0.5f;   // 0.5도
+    [SerializeField] private float largePositionThreshold = 0.15f;
+    [SerializeField] private float largeRotationThreshold = 10f;
+    [SerializeField] private GameObject reAlignmentIndicator;
+    [SerializeField] private float indicatorVisibleDuration = 0.75f;
+
+    [Header("상태 안내 UI")]
+    [SerializeField] private TMP_Text statusText;
+    [SerializeField] private string waitingMessage = "마커를 비춰 주세요";
+    [SerializeField] private string successMessage = "경로를 표시했습니다";
+    [SerializeField] private string reAligningMessage = "위치를 재정렬하고 있습니다";
 
     [Header("에디터 테스트")]
     [SerializeField] private int editorTestRouteOrder;
@@ -35,10 +47,17 @@ public class sh_MarkerRouteController : MonoBehaviour
     private bool isInitialized;
     private bool hasAlignedBuildingRoot;
     private Coroutine alignmentCoroutine;
+    private string currentReferenceMarkerName;
+    private string pendingMarkerName;
+    private Vector3 pendingMarkerPosition;
+    private Quaternion pendingMarkerRotation;
+    private float pendingMarkerStableUntil;
+    private float indicatorHideAtTime;
 
     private void Awake()
     {
         InitializeRoutePool();
+        SetStatusMessage(waitingMessage);
     }
 
     private void OnEnable()
@@ -49,6 +68,17 @@ public class sh_MarkerRouteController : MonoBehaviour
     private void OnDisable()
     {
         UnsubscribeTrackedImageEvents();
+    }
+
+    private void Update()
+    {
+        if (reAlignmentIndicator != null &&
+            reAlignmentIndicator.activeSelf &&
+            Time.time >= indicatorHideAtTime)
+        {
+            reAlignmentIndicator.SetActive(false);
+            SetStatusMessage(successMessage);
+        }
     }
 
     private void InitializeRoutePool()
@@ -84,19 +114,19 @@ public class sh_MarkerRouteController : MonoBehaviour
     {
         if (trackedImageManager == null)
         {
-            Debug.LogError("[sh_MarkerRouteController] AR Tracked Image Manager 참조가 비어 있습니다.", this);
+            Debug.LogError("[sh_MarkerRouteController] 'Tracked Image Manager' 필드가 비어 있습니다. ARScene의 MarkerRouteController 오브젝트에서 XR Origin의 AR Tracked Image Manager를 연결하세요.", this);
             return false;
         }
 
         if (buildingContentRoot == null)
         {
-            Debug.LogError("[sh_MarkerRouteController] Building Content Root 참조가 비어 있습니다.", this);
+            Debug.LogError("[sh_MarkerRouteController] 'Building Content Root' 필드가 비어 있습니다. ARScene의 MarkerRouteController 오브젝트에서 BuildingContentRoot를 연결하세요.", this);
             return false;
         }
 
         if (routeContentRoot == null)
         {
-            Debug.LogError("[sh_MarkerRouteController] Route Content Root 참조가 비어 있습니다.", this);
+            Debug.LogError("[sh_MarkerRouteController] 'Route Content Root' 필드가 비어 있습니다. ARScene의 MarkerRouteController 오브젝트에서 BuildingContentRoot/RouteContentRoot를 연결하세요.", this);
             return false;
         }
 
@@ -179,31 +209,97 @@ public class sh_MarkerRouteController : MonoBehaviour
 
     private void OnTrackedImagesChanged(ARTrackedImagesChangedEventArgs eventArgs)
     {
-        HandleTrackedImages(eventArgs.added, "added");
-        HandleTrackedImages(eventArgs.updated, "updated");
+        if (TrySelectTrackedImage(eventArgs.updated, out ARTrackedImage trackedImage) ||
+            TrySelectTrackedImage(eventArgs.added, out trackedImage))
+        {
+            HandleTrackedImage(trackedImage);
+            return;
+        }
+
+        SetStatusMessage(waitingMessage);
     }
 
-    private void HandleTrackedImages(IReadOnlyList<ARTrackedImage> trackedImages, string source)
+    private bool TrySelectTrackedImage(IReadOnlyList<ARTrackedImage> trackedImages, out ARTrackedImage selectedTrackedImage)
     {
+        selectedTrackedImage = null;
+
+        if (trackedImages == null)
+            return false;
+
         for (int index = 0; index < trackedImages.Count; index++)
         {
             ARTrackedImage trackedImage = trackedImages[index];
             if (trackedImage == null || trackedImage.trackingState != TrackingState.Tracking)
                 continue;
 
-            string markerName = trackedImage.referenceImage.name;
-            if (!TryGetRouteData(markerName, out sh_MarkerRouteData routeData))
+            if (trackedImage.referenceImage.name == currentReferenceMarkerName)
             {
-                Debug.LogWarning($"[sh_MarkerRouteController] 마커 데이터와 일치하지 않는 이미지 이름입니다: {markerName}", trackedImage.gameObject);
-                continue;
+                selectedTrackedImage = trackedImage;
+                return true;
             }
 
-            // 마커 인식 시 BuildingContentRoot 좌표계 정렬
-            AlignBuildingContentRoot(trackedImage.transform, routeData);
+            if (selectedTrackedImage == null)
+                selectedTrackedImage = trackedImage;
+        }
 
-            // 해당 구간 선로 표시 활성화 (현재 + 이전 2개)
+        return selectedTrackedImage != null;
+    }
+
+    private void HandleTrackedImage(ARTrackedImage trackedImage)
+    {
+        string markerName = trackedImage.referenceImage.name;
+        if (!TryGetRouteData(markerName, out sh_MarkerRouteData routeData))
+        {
+            Debug.LogWarning($"[sh_MarkerRouteController] 마커 데이터와 일치하지 않는 이미지 이름입니다: {markerName}", trackedImage.gameObject);
+            return;
+        }
+
+        if (!hasAlignedBuildingRoot)
+        {
+            AlignBuildingContentRoot(trackedImage.transform, routeData);
+            currentReferenceMarkerName = markerName;
             SetActiveRoutes(routeData.RouteOrder);
-            Debug.Log($"[sh_MarkerRouteController] 마커 감지 ({source}): {markerName}, routeOrder={routeData.RouteOrder}", trackedImage.gameObject);
+            SetStatusMessage(successMessage);
+            return;
+        }
+
+        if (markerName == currentReferenceMarkerName)
+        {
+            pendingMarkerName = null;
+            if (AlignBuildingContentRoot(trackedImage.transform, routeData))
+                SetActiveRoutes(routeData.RouteOrder);
+            SetStatusMessage(successMessage);
+            return;
+        }
+
+        if (pendingMarkerName != markerName)
+        {
+            pendingMarkerName = markerName;
+            pendingMarkerPosition = trackedImage.transform.position;
+            pendingMarkerRotation = trackedImage.transform.rotation;
+            pendingMarkerStableUntil = Time.time + poseStableDuration;
+            return;
+        }
+
+        if (Vector3.Distance(pendingMarkerPosition, trackedImage.transform.position) > minPositionThreshold ||
+            Quaternion.Angle(pendingMarkerRotation, trackedImage.transform.rotation) > minRotationThreshold)
+        {
+            pendingMarkerPosition = trackedImage.transform.position;
+            pendingMarkerRotation = trackedImage.transform.rotation;
+            pendingMarkerStableUntil = Time.time + poseStableDuration;
+            return;
+        }
+
+        if (Time.time < pendingMarkerStableUntil)
+            return;
+
+        pendingMarkerName = null;
+
+        if (AlignBuildingContentRoot(trackedImage.transform, routeData))
+        {
+            currentReferenceMarkerName = markerName;
+            SetActiveRoutes(routeData.RouteOrder);
+            SetStatusMessage(successMessage);
         }
     }
 
@@ -211,10 +307,10 @@ public class sh_MarkerRouteController : MonoBehaviour
     /// 실제 마커의 월드 Pose와 건물 좌표계 내 가상 마커 Pose를 역산하여 BuildingContentRoot를 정렬합니다.
     /// 벽면에 부착된 마커인 경우 수직-수평 축 오프셋을 자동 보정합니다.
     /// </summary>
-    private void AlignBuildingContentRoot(Transform trackedMarkerTransform, sh_MarkerRouteData routeData)
+    private bool AlignBuildingContentRoot(Transform trackedMarkerTransform, sh_MarkerRouteData routeData)
     {
         if (trackedMarkerTransform == null || routeData == null || buildingContentRoot == null)
-            return;
+            return false;
 
         // 캐싱되지 않은 경우 즉시 캐싱
         if (!routeData.IsLocalPoseCached)
@@ -230,10 +326,13 @@ public class sh_MarkerRouteController : MonoBehaviour
             trackedRotation = trackedRotation * Quaternion.Euler(wallMarkerOffsetEuler);
         }
 
+        Quaternion horizontalTrackedRotation = GetHorizontalRotation(trackedRotation);
+        Quaternion horizontalKnownRotation = GetHorizontalRotation(knownMarkerLocalRotation);
+
         // 역산 수식:
         // rootRotation = trackedRotation * inverse(knownMarkerLocalRotation)
         // rootPosition = trackedMarkerPosition - (rootRotation * knownMarkerLocalPosition)
-        Quaternion targetRootRotation = trackedRotation * Quaternion.Inverse(knownMarkerLocalRotation);
+        Quaternion targetRootRotation = horizontalTrackedRotation * Quaternion.Inverse(horizontalKnownRotation);
         Vector3 targetRootPosition = trackedMarkerTransform.position - (targetRootRotation * knownMarkerLocalPosition);
 
         if (!hasAlignedBuildingRoot)
@@ -242,30 +341,39 @@ public class sh_MarkerRouteController : MonoBehaviour
             buildingContentRoot.SetPositionAndRotation(targetRootPosition, targetRootRotation);
             hasAlignedBuildingRoot = true;
             Debug.Log($"[sh_MarkerRouteController] 첫 마커 기반 좌표계 정렬 완료: {routeData.MarkerName}", buildingContentRoot.gameObject);
+            return true;
         }
-        else
+
+        float posDiff = Vector3.Distance(buildingContentRoot.position, targetRootPosition);
+        float rotDiff = Quaternion.Angle(buildingContentRoot.rotation, targetRootRotation);
+
+        if (posDiff < minPositionThreshold && rotDiff < minRotationThreshold)
+            return false; // 미세 오차는 무시하여 화면 떨림 방지
+
+        if (posDiff >= largePositionThreshold || rotDiff >= largeRotationThreshold)
         {
-            // 재인식 시: 드리프트 보정
-            float posDiff = Vector3.Distance(buildingContentRoot.position, targetRootPosition);
-            float rotDiff = Quaternion.Angle(buildingContentRoot.rotation, targetRootRotation);
-
-            if (posDiff < minPositionThreshold && rotDiff < minRotationThreshold)
-                return; // 미세 오차는 무시하여 화면 떨림 방지
-
-            if (useSmoothInterpolation)
+            if (alignmentCoroutine != null)
             {
-                if (alignmentCoroutine != null)
-                    StopCoroutine(alignmentCoroutine);
-
-                alignmentCoroutine = StartCoroutine(SmoothAlignRoutine(targetRootPosition, targetRootRotation));
-            }
-            else
-            {
-                buildingContentRoot.SetPositionAndRotation(targetRootPosition, targetRootRotation);
+                StopCoroutine(alignmentCoroutine);
+                alignmentCoroutine = null;
             }
 
-            Debug.Log($"[sh_MarkerRouteController] 마커 재정렬 완료: {routeData.MarkerName} (이동 거리: {posDiff:F3}m, 회전 각도: {rotDiff:F1}°)", buildingContentRoot.gameObject);
+            buildingContentRoot.SetPositionAndRotation(targetRootPosition, targetRootRotation);
+            ShowReAlignmentIndicator();
+            Debug.Log($"[sh_MarkerRouteController] 큰 오차 재정렬 완료: {routeData.MarkerName} (이동 거리: {posDiff:F3}m, 회전 각도: {rotDiff:F1}°)", buildingContentRoot.gameObject);
+            return true;
         }
+
+        if (alignmentCoroutine != null)
+            StopCoroutine(alignmentCoroutine);
+
+        if (useSmoothInterpolation)
+            alignmentCoroutine = StartCoroutine(SmoothAlignRoutine(targetRootPosition, targetRootRotation));
+        else
+            buildingContentRoot.SetPositionAndRotation(targetRootPosition, targetRootRotation);
+
+        Debug.Log($"[sh_MarkerRouteController] 마커 재정렬 완료: {routeData.MarkerName} (이동 거리: {posDiff:F3}m, 회전 각도: {rotDiff:F1}°)", buildingContentRoot.gameObject);
+        return true;
     }
 
     private IEnumerator SmoothAlignRoutine(Vector3 targetPosition, Quaternion targetRotation)
@@ -280,6 +388,31 @@ public class sh_MarkerRouteController : MonoBehaviour
 
         buildingContentRoot.SetPositionAndRotation(targetPosition, targetRotation);
         alignmentCoroutine = null;
+    }
+
+    private void ShowReAlignmentIndicator()
+    {
+        if (reAlignmentIndicator == null)
+        {
+            SetStatusMessage(reAligningMessage);
+            return;
+        }
+
+        reAlignmentIndicator.SetActive(true);
+        indicatorHideAtTime = Time.time + indicatorVisibleDuration;
+        SetStatusMessage(reAligningMessage);
+    }
+
+    private Quaternion GetHorizontalRotation(Quaternion sourceRotation)
+    {
+        Vector3 forwardOnPlane = Vector3.ProjectOnPlane(sourceRotation * Vector3.forward, Vector3.up);
+        if (forwardOnPlane.sqrMagnitude < 0.0001f)
+            forwardOnPlane = Vector3.ProjectOnPlane(sourceRotation * Vector3.right, Vector3.up);
+
+        if (forwardOnPlane.sqrMagnitude < 0.0001f)
+            return Quaternion.identity;
+
+        return Quaternion.LookRotation(forwardOnPlane.normalized, Vector3.up);
     }
 
     public void SetActiveRoutes(int currentRouteOrder)
@@ -347,5 +480,13 @@ public class sh_MarkerRouteController : MonoBehaviour
 
         routeData = null;
         return false;
+    }
+
+    private void SetStatusMessage(string message)
+    {
+        if (statusText == null)
+            return;
+
+        statusText.text = message;
     }
 }
