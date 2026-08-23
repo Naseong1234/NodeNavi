@@ -16,6 +16,14 @@ public class sh_MarkerRouteController : MonoBehaviour
     [SerializeField] private Transform routeContentRoot;
     [SerializeField] private List<sh_MarkerRouteData> markerRoutes = new List<sh_MarkerRouteData>(RequiredMarkerCount);
 
+    [Header("1번 마커 선택 UI")]
+    [SerializeField] private string selectionMarkerName = "Marker_01";
+    [SerializeField] private GameObject pcSelectionPanel;
+    [SerializeField] private TMP_Text selectionStateText;
+    [SerializeField] private string noSelectionLabel = "선택 안 됨";
+    [SerializeField] private string pc1SelectionLabel = "1번 PC 선택";
+    [SerializeField] private string pc2SelectionLabel = "2번 PC 선택";
+
     [Header("마커 부착 방식 (벽면 수직 부착 보정)")]
     [Tooltip("마커가 벽(수직면)에 부착된 경우 체크합니다. 체크 시 건물이 벽에 세워지지 않고 바닥(땅 위)에 정상적으로 생성됩니다.")]
     [SerializeField] private bool isWallMountedMarker = true;
@@ -27,8 +35,8 @@ public class sh_MarkerRouteController : MonoBehaviour
     [SerializeField] private bool useSmoothInterpolation = true;
     [SerializeField] private float interpolationSpeed = 10f;
     [SerializeField] private float poseStableDuration = 0.3f;
-    [SerializeField] private float minPositionThreshold = 0.005f; // 5mm
-    [SerializeField] private float minRotationThreshold = 0.5f;   // 0.5도
+    [SerializeField] private float minPositionThreshold = 0.005f;
+    [SerializeField] private float minRotationThreshold = 0.5f;
     [SerializeField] private float largePositionThreshold = 0.15f;
     [SerializeField] private float largeRotationThreshold = 10f;
     [SerializeField] private GameObject reAlignmentIndicator;
@@ -39,13 +47,18 @@ public class sh_MarkerRouteController : MonoBehaviour
     [SerializeField] private string waitingMessage = "마커를 비춰 주세요";
     [SerializeField] private string successMessage = "경로를 표시했습니다";
     [SerializeField] private string reAligningMessage = "위치를 재정렬하고 있습니다";
+    [SerializeField] private string selectionPromptMessage = "확인할 PC를 선택해 주세요";
+    [SerializeField] private string selectionCompletedMessage = "선택한 PC 경로를 표시합니다";
+    [SerializeField] private string selectionRequiredMessage = "먼저 1번 마커에서 PC를 선택해 주세요";
 
     [Header("에디터 테스트")]
     [SerializeField] private int editorTestRouteOrder;
+    [SerializeField] private sh_PCPathOption editorTestPathOption = sh_PCPathOption.PC1;
 
     private bool isSubscribed;
     private bool isInitialized;
     private bool hasAlignedBuildingRoot;
+    private bool hasConfirmedPathSelection;
     private Coroutine alignmentCoroutine;
     private string currentReferenceMarkerName;
     private string pendingMarkerName;
@@ -53,10 +66,16 @@ public class sh_MarkerRouteController : MonoBehaviour
     private Quaternion pendingMarkerRotation;
     private float pendingMarkerStableUntil;
     private float indicatorHideAtTime;
+    private sh_PCPathOption currentPathOption = sh_PCPathOption.None;
+
+    public sh_PCPathOption CurrentPathOption => currentPathOption;
+    public bool HasConfirmedPathSelection => hasConfirmedPathSelection;
 
     private void Awake()
     {
         InitializeRoutePool();
+        HidePCSelectionPanel();
+        RefreshSelectionStateText();
         SetStatusMessage(waitingMessage);
     }
 
@@ -77,7 +96,7 @@ public class sh_MarkerRouteController : MonoBehaviour
             Time.time >= indicatorHideAtTime)
         {
             reAlignmentIndicator.SetActive(false);
-            SetStatusMessage(successMessage);
+            SetStatusMessage(GetCurrentSuccessMessage());
         }
     }
 
@@ -92,22 +111,42 @@ public class sh_MarkerRouteController : MonoBehaviour
         for (int index = 0; index < markerRoutes.Count; index++)
         {
             sh_MarkerRouteData routeData = markerRoutes[index];
-
-            // BuildingContentRoot 기준의 상대 로컬 Pose를 캐싱
             routeData.CacheLocalPose(buildingContentRoot);
-
-            // 경로 Prefab 인스턴스 생성 및 비활성화 풀링
-            if (routeData.RoutePrefab != null)
-            {
-                GameObject instance = Instantiate(routeData.RoutePrefab, routeContentRoot);
-                instance.name = $"{routeData.RoutePrefab.name}_Runtime";
-                instance.SetActive(false);
-                routeData.RuntimeInstance = instance;
-            }
+            CreateRuntimeInstance(routeData, sh_PCPathOption.None);
+            CreateRuntimeInstance(routeData, sh_PCPathOption.PC1);
+            CreateRuntimeInstance(routeData, sh_PCPathOption.PC2);
         }
 
         isInitialized = true;
-        Debug.Log($"[sh_MarkerRouteController] 마커 {markerRoutes.Count}개 로컬 좌표 캐싱 완료 및 경로 prefab 풀링 준비 완료.", this);
+        Debug.Log($"[sh_MarkerRouteController] 마커 {markerRoutes.Count}개 로컬 좌표 캐싱 완료 및 PC별 경로 prefab 풀링 준비 완료.", this);
+    }
+
+    private void CreateRuntimeInstance(sh_MarkerRouteData routeData, sh_PCPathOption pathOption)
+    {
+        GameObject prefab = null;
+        switch (pathOption)
+        {
+            case sh_PCPathOption.PC1:
+                prefab = routeData.PC1RoutePrefab;
+                break;
+            case sh_PCPathOption.PC2:
+                prefab = routeData.PC2RoutePrefab;
+                break;
+            default:
+                prefab = routeData.RoutePrefab;
+                break;
+        }
+
+        if (prefab == null)
+            return;
+
+        if (routeData.GetRuntimeInstance(pathOption) != null)
+            return;
+
+        GameObject instance = Instantiate(prefab, routeContentRoot);
+        instance.name = $"{prefab.name}_{pathOption}_Runtime";
+        instance.SetActive(false);
+        routeData.SetRuntimeInstance(pathOption, instance);
     }
 
     private bool ValidateConfiguration()
@@ -126,7 +165,7 @@ public class sh_MarkerRouteController : MonoBehaviour
 
         if (routeContentRoot == null)
         {
-            Debug.LogError("[sh_MarkerRouteController] 'Route Content Root' 필드가 비어 있습니다. ARScene의 MarkerRouteController 오브젝트에서 BuildingContentRoot/RouteContentRoot를 연결하세요.", this);
+            Debug.LogError("[sh_MarkerRouteController] 'Route Content Root' 필드가 비어 있습니다. ARScene의 MarkerRouteController 오브젝트에서 RouteContentRoot를 연결하세요.", this);
             return false;
         }
 
@@ -167,12 +206,6 @@ public class sh_MarkerRouteController : MonoBehaviour
                 return false;
             }
 
-            if (routeData.RoutePrefab == null)
-            {
-                Debug.LogError($"[sh_MarkerRouteController] {routeData.MarkerName}의 routePrefab이 비어 있습니다.", this);
-                return false;
-            }
-
             if (!routeOrders.Add(routeData.RouteOrder))
             {
                 Debug.LogError($"[sh_MarkerRouteController] 중복 routeOrder가 있습니다: {routeData.RouteOrder}", this);
@@ -182,6 +215,23 @@ public class sh_MarkerRouteController : MonoBehaviour
             if (routeData.RouteOrder < 0 || routeData.RouteOrder >= RequiredMarkerCount)
             {
                 Debug.LogError($"[sh_MarkerRouteController] {routeData.MarkerName}의 routeOrder는 0부터 {RequiredMarkerCount - 1} 사이여야 합니다.", this);
+                return false;
+            }
+
+            if (routeData.RouteOrder == 0)
+            {
+                if (!routeData.HasCommonRoutePrefab && !routeData.HasPCSpecificRoutes)
+                {
+                    Debug.LogError($"[sh_MarkerRouteController] {routeData.MarkerName}은 1번 마커이므로 공통 prefab 또는 PC별 prefab 중 하나 이상이 필요합니다.", this);
+                    return false;
+                }
+
+                continue;
+            }
+
+            if (routeData.PC1RoutePrefab == null || routeData.PC2RoutePrefab == null)
+            {
+                Debug.LogError($"[sh_MarkerRouteController] {routeData.MarkerName}은 2번 이후 마커이므로 PC1/PC2용 prefab을 모두 연결해야 합니다.", this);
                 return false;
             }
         }
@@ -213,6 +263,12 @@ public class sh_MarkerRouteController : MonoBehaviour
             TrySelectTrackedImage(eventArgs.added, out trackedImage))
         {
             HandleTrackedImage(trackedImage);
+            return;
+        }
+
+        if (!hasConfirmedPathSelection && pcSelectionPanel != null && pcSelectionPanel.activeSelf)
+        {
+            SetStatusMessage(selectionPromptMessage);
             return;
         }
 
@@ -258,8 +314,7 @@ public class sh_MarkerRouteController : MonoBehaviour
         {
             AlignBuildingContentRoot(trackedImage.transform, routeData);
             currentReferenceMarkerName = markerName;
-            SetActiveRoutes(routeData.RouteOrder);
-            SetStatusMessage(successMessage);
+            UpdateRouteAndUIForMarker(routeData);
             return;
         }
 
@@ -267,8 +322,10 @@ public class sh_MarkerRouteController : MonoBehaviour
         {
             pendingMarkerName = null;
             if (AlignBuildingContentRoot(trackedImage.transform, routeData))
-                SetActiveRoutes(routeData.RouteOrder);
-            SetStatusMessage(successMessage);
+                UpdateRouteAndUIForMarker(routeData);
+            else
+                UpdateStatusForMarker(routeData);
+
             return;
         }
 
@@ -298,9 +355,130 @@ public class sh_MarkerRouteController : MonoBehaviour
         if (AlignBuildingContentRoot(trackedImage.transform, routeData))
         {
             currentReferenceMarkerName = markerName;
-            SetActiveRoutes(routeData.RouteOrder);
-            SetStatusMessage(successMessage);
+            UpdateRouteAndUIForMarker(routeData);
         }
+    }
+
+    private void UpdateRouteAndUIForMarker(sh_MarkerRouteData routeData)
+    {
+        if (routeData == null)
+            return;
+
+        bool isSelectionMarker = routeData.MarkerName == selectionMarkerName || routeData.RouteOrder == 0;
+        if (isSelectionMarker)
+        {
+            ShowPCSelectionPanel();
+            SetActiveRoutes(routeData.RouteOrder);
+            UpdateStatusForMarker(routeData);
+            return;
+        }
+
+        if (!hasConfirmedPathSelection)
+        {
+            HideAllRoutes();
+            SetStatusMessage(selectionRequiredMessage);
+            return;
+        }
+
+        HidePCSelectionPanel();
+        SetActiveRoutes(routeData.RouteOrder);
+        SetStatusMessage(selectionCompletedMessage);
+    }
+
+    private void UpdateStatusForMarker(sh_MarkerRouteData routeData)
+    {
+        if (routeData == null)
+            return;
+
+        bool isSelectionMarker = routeData.MarkerName == selectionMarkerName || routeData.RouteOrder == 0;
+        if (isSelectionMarker && !hasConfirmedPathSelection)
+        {
+            SetStatusMessage(selectionPromptMessage);
+            return;
+        }
+
+        if (!hasConfirmedPathSelection && routeData.RouteOrder > 0)
+        {
+            SetStatusMessage(selectionRequiredMessage);
+            return;
+        }
+
+        SetStatusMessage(GetCurrentSuccessMessage());
+    }
+
+    public void SelectPC1()
+    {
+        SetCurrentPathOption(sh_PCPathOption.PC1);
+    }
+
+    public void SelectPC2()
+    {
+        SetCurrentPathOption(sh_PCPathOption.PC2);
+    }
+
+    public void ConfirmPCSelection()
+    {
+        if (currentPathOption == sh_PCPathOption.None)
+        {
+            SetStatusMessage(selectionPromptMessage);
+            return;
+        }
+
+        hasConfirmedPathSelection = true;
+        HidePCSelectionPanel();
+
+        if (TryGetRouteData(currentReferenceMarkerName, out sh_MarkerRouteData currentRoute))
+            SetActiveRoutes(currentRoute.RouteOrder);
+
+        SetStatusMessage(selectionCompletedMessage);
+    }
+
+    public void ResetPCSelection()
+    {
+        hasConfirmedPathSelection = false;
+        currentPathOption = sh_PCPathOption.None;
+        RefreshSelectionStateText();
+        HideAllRoutes();
+        SetStatusMessage(waitingMessage);
+    }
+
+    private void SetCurrentPathOption(sh_PCPathOption pathOption)
+    {
+        currentPathOption = pathOption;
+        hasConfirmedPathSelection = false;
+        RefreshSelectionStateText();
+        SetStatusMessage(selectionPromptMessage);
+        UpdateLiveRoutePreview();
+    }
+
+    private void UpdateLiveRoutePreview()
+    {
+        if (!isInitialized)
+            return;
+
+        if (!TryGetRouteData(currentReferenceMarkerName, out sh_MarkerRouteData currentRoute))
+            return;
+
+        SetActiveRoutes(currentRoute.RouteOrder);
+    }
+
+    private string GetCurrentSuccessMessage()
+    {
+        return hasConfirmedPathSelection ? selectionCompletedMessage : successMessage;
+    }
+
+    private void ShowPCSelectionPanel()
+    {
+        if (pcSelectionPanel != null)
+            pcSelectionPanel.SetActive(true);
+
+        RefreshSelectionStateText();
+    }
+
+    private void HidePCSelectionPanel()
+    {
+        if (pcSelectionPanel != null)
+            pcSelectionPanel.SetActive(false);
     }
 
     /// <summary>
@@ -312,32 +490,24 @@ public class sh_MarkerRouteController : MonoBehaviour
         if (trackedMarkerTransform == null || routeData == null || buildingContentRoot == null)
             return false;
 
-        // 캐싱되지 않은 경우 즉시 캐싱
         if (!routeData.IsLocalPoseCached)
             routeData.CacheLocalPose(buildingContentRoot);
 
         Vector3 knownMarkerLocalPosition = routeData.CachedKnownLocalPosition;
         Quaternion knownMarkerLocalRotation = routeData.CachedKnownLocalRotation;
 
-        // 벽면 마커인 경우: AR Foundation의 이미지 로컬 축(Y=법선, Z=상단)을 Unity 표준 축(Y=상단, Z=법선)으로 90도 회전 보정
         Quaternion trackedRotation = trackedMarkerTransform.rotation;
         if (isWallMountedMarker)
-        {
             trackedRotation = trackedRotation * Quaternion.Euler(wallMarkerOffsetEuler);
-        }
 
         Quaternion horizontalTrackedRotation = GetHorizontalRotation(trackedRotation);
         Quaternion horizontalKnownRotation = GetHorizontalRotation(knownMarkerLocalRotation);
 
-        // 역산 수식:
-        // rootRotation = trackedRotation * inverse(knownMarkerLocalRotation)
-        // rootPosition = trackedMarkerPosition - (rootRotation * knownMarkerLocalPosition)
         Quaternion targetRootRotation = horizontalTrackedRotation * Quaternion.Inverse(horizontalKnownRotation);
         Vector3 targetRootPosition = trackedMarkerTransform.position - (targetRootRotation * knownMarkerLocalPosition);
 
         if (!hasAlignedBuildingRoot)
         {
-            // 첫 마커 인식 시에는 즉시 정렬
             buildingContentRoot.SetPositionAndRotation(targetRootPosition, targetRootRotation);
             hasAlignedBuildingRoot = true;
             Debug.Log($"[sh_MarkerRouteController] 첫 마커 기반 좌표계 정렬 완료: {routeData.MarkerName}", buildingContentRoot.gameObject);
@@ -348,7 +518,7 @@ public class sh_MarkerRouteController : MonoBehaviour
         float rotDiff = Quaternion.Angle(buildingContentRoot.rotation, targetRootRotation);
 
         if (posDiff < minPositionThreshold && rotDiff < minRotationThreshold)
-            return false; // 미세 오차는 무시하여 화면 떨림 방지
+            return false;
 
         if (posDiff >= largePositionThreshold || rotDiff >= largeRotationThreshold)
         {
@@ -431,11 +601,63 @@ public class sh_MarkerRouteController : MonoBehaviour
         for (int index = 0; index < markerRoutes.Count; index++)
         {
             sh_MarkerRouteData routeData = markerRoutes[index];
-            if (routeData.RuntimeInstance == null)
-                continue;
+            routeData.DisableAllRuntimeInstances();
 
             bool shouldBeActive = routeData.RouteOrder >= minRouteOrder && routeData.RouteOrder <= currentRouteOrder;
-            routeData.RuntimeInstance.SetActive(shouldBeActive);
+            if (!shouldBeActive)
+                continue;
+
+            GameObject activeInstance = ResolveRuntimeInstance(routeData);
+            if (activeInstance != null)
+                activeInstance.SetActive(true);
+        }
+    }
+
+    private GameObject ResolveRuntimeInstance(sh_MarkerRouteData routeData)
+    {
+        if (routeData == null)
+            return null;
+
+        if (routeData.RouteOrder == 0)
+        {
+            if (currentPathOption != sh_PCPathOption.None)
+            {
+                GameObject selectedInstance = routeData.GetRuntimeInstance(currentPathOption);
+                if (selectedInstance != null)
+                    return selectedInstance;
+            }
+
+            return routeData.GetRuntimeInstance(sh_PCPathOption.None);
+        }
+
+        if (!hasConfirmedPathSelection)
+            return null;
+
+        return routeData.GetRuntimeInstance(currentPathOption);
+    }
+
+    private void HideAllRoutes()
+    {
+        for (int index = 0; index < markerRoutes.Count; index++)
+            markerRoutes[index].DisableAllRuntimeInstances();
+    }
+
+    private void RefreshSelectionStateText()
+    {
+        if (selectionStateText == null)
+            return;
+
+        switch (currentPathOption)
+        {
+            case sh_PCPathOption.PC1:
+                selectionStateText.text = pc1SelectionLabel;
+                break;
+            case sh_PCPathOption.PC2:
+                selectionStateText.text = pc2SelectionLabel;
+                break;
+            default:
+                selectionStateText.text = noSelectionLabel;
+                break;
         }
     }
 
@@ -451,10 +673,15 @@ public class sh_MarkerRouteController : MonoBehaviour
             return;
         }
 
-        sh_MarkerRouteData targetRoute = markerRoutes.Find(r => r.RouteOrder == editorTestRouteOrder);
-        if (targetRoute != null && targetRoute.KnownMarkerTransform != null)
+        sh_MarkerRouteData targetRoute = markerRoutes.Find(route => route.RouteOrder == editorTestRouteOrder);
+        if (targetRoute == null)
         {
-            // 에디터 테스트 시 가상 카메라 위치(월드 원점 앞 1.5m 높이)에 해당 마커가 오도록 가상 정렬 시뮬레이션
+            Debug.LogWarning($"[sh_MarkerRouteController] routeOrder={editorTestRouteOrder} 데이터를 찾지 못했습니다.", this);
+            return;
+        }
+
+        if (targetRoute.KnownMarkerTransform != null)
+        {
             GameObject dummyTrackedImage = new GameObject("Temp_Editor_TrackedMarker");
             dummyTrackedImage.transform.position = new Vector3(0f, 1.5f, 1.0f);
             dummyTrackedImage.transform.rotation = Quaternion.identity;
@@ -463,8 +690,11 @@ public class sh_MarkerRouteController : MonoBehaviour
             DestroyImmediate(dummyTrackedImage);
         }
 
+        currentPathOption = editorTestRouteOrder == 0 ? currentPathOption : editorTestPathOption;
+        hasConfirmedPathSelection = editorTestRouteOrder == 0 || currentPathOption != sh_PCPathOption.None;
+        RefreshSelectionStateText();
         SetActiveRoutes(editorTestRouteOrder);
-        Debug.Log($"[sh_MarkerRouteController] [Editor 테스트] RouteOrder={editorTestRouteOrder} 선로 활성화 및 가상 정렬 완료", this);
+        Debug.Log($"[sh_MarkerRouteController] [Editor 테스트] RouteOrder={editorTestRouteOrder}, 선택 경로={currentPathOption} 선로 활성화 및 가상 정렬 완료", this);
     }
 
     private bool TryGetRouteData(string markerName, out sh_MarkerRouteData routeData)
