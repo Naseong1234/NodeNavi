@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 public enum sh_PCPathOption
 {
@@ -14,10 +15,12 @@ public class sh_MarkerRouteData
     [SerializeField] private string markerName;
     [SerializeField] private int routeOrder;
     [SerializeField] private Transform knownMarkerTransform;
-    [SerializeField] private GameObject routePrefab;
+    [FormerlySerializedAs("routePrefab")]
+    [SerializeField] private GameObject bothPrefab;
     [SerializeField] private GameObject pc1RoutePrefab;
     [SerializeField] private GameObject pc2RoutePrefab;
-    [SerializeField, HideInInspector] private GameObject runtimeInstance;
+    [FormerlySerializedAs("runtimeInstance")]
+    [SerializeField, HideInInspector] private GameObject bothRuntimeInstance;
     [SerializeField, HideInInspector] private GameObject pc1RuntimeInstance;
     [SerializeField, HideInInspector] private GameObject pc2RuntimeInstance;
 
@@ -28,14 +31,14 @@ public class sh_MarkerRouteData
     public string MarkerName => markerName;
     public int RouteOrder => routeOrder;
     public Transform KnownMarkerTransform => knownMarkerTransform;
-    public GameObject RoutePrefab => routePrefab;
+    public GameObject BothPrefab => bothPrefab;
     public GameObject PC1RoutePrefab => pc1RoutePrefab;
     public GameObject PC2RoutePrefab => pc2RoutePrefab;
     public Vector3 CachedKnownLocalPosition => cachedKnownLocalPosition;
     public Quaternion CachedKnownLocalRotation => cachedKnownLocalRotation;
     public bool IsLocalPoseCached => isLocalPoseCached;
 
-    public bool HasCommonRoutePrefab => routePrefab != null;
+    public bool HasBothPrefab => bothPrefab != null;
     public bool HasPCSpecificRoutes => pc1RoutePrefab != null || pc2RoutePrefab != null;
 
     public GameObject GetPrefabForOption(sh_PCPathOption pathOption)
@@ -43,11 +46,11 @@ public class sh_MarkerRouteData
         switch (pathOption)
         {
             case sh_PCPathOption.PC1:
-                return pc1RoutePrefab != null ? pc1RoutePrefab : routePrefab;
+                return pc1RoutePrefab;
             case sh_PCPathOption.PC2:
-                return pc2RoutePrefab != null ? pc2RoutePrefab : routePrefab;
+                return pc2RoutePrefab;
             default:
-                return routePrefab;
+                return bothPrefab;
         }
     }
 
@@ -56,11 +59,11 @@ public class sh_MarkerRouteData
         switch (pathOption)
         {
             case sh_PCPathOption.PC1:
-                return pc1RuntimeInstance != null ? pc1RuntimeInstance : runtimeInstance;
+                return pc1RuntimeInstance;
             case sh_PCPathOption.PC2:
-                return pc2RuntimeInstance != null ? pc2RuntimeInstance : runtimeInstance;
+                return pc2RuntimeInstance;
             default:
-                return runtimeInstance;
+                return bothRuntimeInstance;
         }
     }
 
@@ -75,15 +78,15 @@ public class sh_MarkerRouteData
                 pc2RuntimeInstance = instance;
                 break;
             default:
-                runtimeInstance = instance;
+                bothRuntimeInstance = instance;
                 break;
         }
     }
 
     public void DisableAllRuntimeInstances()
     {
-        if (runtimeInstance != null)
-            runtimeInstance.SetActive(false);
+        if (bothRuntimeInstance != null)
+            bothRuntimeInstance.SetActive(false);
 
         if (pc1RuntimeInstance != null)
             pc1RuntimeInstance.SetActive(false);

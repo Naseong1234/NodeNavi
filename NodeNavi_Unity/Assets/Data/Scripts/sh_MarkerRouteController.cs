@@ -67,6 +67,7 @@ public class sh_MarkerRouteController : MonoBehaviour
     private float pendingMarkerStableUntil;
     private float indicatorHideAtTime;
     private sh_PCPathOption currentPathOption = sh_PCPathOption.None;
+    private int currentVisibleRouteOrder = -1;
 
     public sh_PCPathOption CurrentPathOption => currentPathOption;
     public bool HasConfirmedPathSelection => hasConfirmedPathSelection;
@@ -133,7 +134,7 @@ public class sh_MarkerRouteController : MonoBehaviour
                 prefab = routeData.PC2RoutePrefab;
                 break;
             default:
-                prefab = routeData.RoutePrefab;
+                prefab = routeData.BothPrefab;
                 break;
         }
 
@@ -220,19 +221,23 @@ public class sh_MarkerRouteController : MonoBehaviour
 
             if (routeData.RouteOrder == 0)
             {
-                if (!routeData.HasCommonRoutePrefab && !routeData.HasPCSpecificRoutes)
+                if (!routeData.HasBothPrefab && !routeData.HasPCSpecificRoutes)
                 {
-                    Debug.LogError($"[sh_MarkerRouteController] {routeData.MarkerName}은 1번 마커이므로 공통 prefab 또는 PC별 prefab 중 하나 이상이 필요합니다.", this);
+                    Debug.LogError($"[sh_MarkerRouteController] {routeData.MarkerName}은 1번 마커이므로 Both Prefab 또는 PC별 prefab 중 하나 이상이 필요합니다.", this);
                     return false;
                 }
 
                 continue;
             }
 
+            if (!routeData.HasBothPrefab)
+            {
+                Debug.LogWarning($"[sh_MarkerRouteController] {routeData.MarkerName}의 Both Prefab이 비어 있습니다. 공통 경로는 표시되지 않고 PC별 prefab만 표시됩니다.", this);
+            }
+
             if (routeData.PC1RoutePrefab == null || routeData.PC2RoutePrefab == null)
             {
-                Debug.LogError($"[sh_MarkerRouteController] {routeData.MarkerName}은 2번 이후 마커이므로 PC1/PC2용 prefab을 모두 연결해야 합니다.", this);
-                return false;
+                Debug.LogWarning($"[sh_MarkerRouteController] {routeData.MarkerName}의 PC1/PC2용 prefab이 일부 비어 있습니다. 해당 PC 전용 경로는 표시되지 않습니다.", this);
             }
         }
 
@@ -364,11 +369,15 @@ public class sh_MarkerRouteController : MonoBehaviour
         if (routeData == null)
             return;
 
+        currentVisibleRouteOrder = routeData.RouteOrder;
         bool isSelectionMarker = routeData.MarkerName == selectionMarkerName || routeData.RouteOrder == 0;
         if (isSelectionMarker)
         {
             ShowPCSelectionPanel();
-            SetActiveRoutes(routeData.RouteOrder);
+            if (currentPathOption == sh_PCPathOption.None)
+                HideAllRoutes();
+            else
+                ApplyLiveSelectionPreview(routeData.RouteOrder);
             UpdateStatusForMarker(routeData);
             return;
         }
@@ -427,8 +436,8 @@ public class sh_MarkerRouteController : MonoBehaviour
         hasConfirmedPathSelection = true;
         HidePCSelectionPanel();
 
-        if (TryGetRouteData(currentReferenceMarkerName, out sh_MarkerRouteData currentRoute))
-            SetActiveRoutes(currentRoute.RouteOrder);
+        if (currentVisibleRouteOrder >= 0)
+            SetActiveRoutes(currentVisibleRouteOrder);
 
         SetStatusMessage(selectionCompletedMessage);
     }
@@ -437,6 +446,7 @@ public class sh_MarkerRouteController : MonoBehaviour
     {
         hasConfirmedPathSelection = false;
         currentPathOption = sh_PCPathOption.None;
+        currentVisibleRouteOrder = -1;
         RefreshSelectionStateText();
         HideAllRoutes();
         SetStatusMessage(waitingMessage);
@@ -456,10 +466,36 @@ public class sh_MarkerRouteController : MonoBehaviour
         if (!isInitialized)
             return;
 
-        if (!TryGetRouteData(currentReferenceMarkerName, out sh_MarkerRouteData currentRoute))
+        if (currentVisibleRouteOrder < 0)
             return;
 
-        SetActiveRoutes(currentRoute.RouteOrder);
+        ApplyLiveSelectionPreview(currentVisibleRouteOrder);
+    }
+
+    private void ApplyLiveSelectionPreview(int routeOrder)
+    {
+        if (!isInitialized)
+            return;
+
+        if (routeOrder < 0 || routeOrder >= RequiredMarkerCount)
+            return;
+
+        if (currentPathOption == sh_PCPathOption.None)
+        {
+            HideAllRoutes();
+            return;
+        }
+
+        for (int index = 0; index < markerRoutes.Count; index++)
+        {
+            sh_MarkerRouteData routeData = markerRoutes[index];
+            routeData.DisableAllRuntimeInstances();
+
+            if (routeData.RouteOrder != routeOrder)
+                continue;
+
+            SetRouteInstancesActive(routeData, currentPathOption != sh_PCPathOption.None);
+        }
     }
 
     private string GetCurrentSuccessMessage()
@@ -607,33 +643,25 @@ public class sh_MarkerRouteController : MonoBehaviour
             if (!shouldBeActive)
                 continue;
 
-            GameObject activeInstance = ResolveRuntimeInstance(routeData);
-            if (activeInstance != null)
-                activeInstance.SetActive(true);
+            SetRouteInstancesActive(routeData, hasConfirmedPathSelection);
         }
     }
 
-    private GameObject ResolveRuntimeInstance(sh_MarkerRouteData routeData)
+    private void SetRouteInstancesActive(sh_MarkerRouteData routeData, bool includeSelectedPC)
     {
         if (routeData == null)
-            return null;
+            return;
 
-        if (routeData.RouteOrder == 0)
-        {
-            if (currentPathOption != sh_PCPathOption.None)
-            {
-                GameObject selectedInstance = routeData.GetRuntimeInstance(currentPathOption);
-                if (selectedInstance != null)
-                    return selectedInstance;
-            }
+        GameObject bothInstance = routeData.GetRuntimeInstance(sh_PCPathOption.None);
+        if (bothInstance != null)
+            bothInstance.SetActive(true);
 
-            return routeData.GetRuntimeInstance(sh_PCPathOption.None);
-        }
+        if (!includeSelectedPC || currentPathOption == sh_PCPathOption.None)
+            return;
 
-        if (!hasConfirmedPathSelection)
-            return null;
-
-        return routeData.GetRuntimeInstance(currentPathOption);
+        GameObject selectedInstance = routeData.GetRuntimeInstance(currentPathOption);
+        if (selectedInstance != null)
+            selectedInstance.SetActive(true);
     }
 
     private void HideAllRoutes()
