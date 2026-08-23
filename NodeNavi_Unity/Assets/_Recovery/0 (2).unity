@@ -2555,6 +2555,8 @@ MonoBehaviour:
   minRotationThreshold: 0.5
   largePositionThreshold: 0.15
   largeRotationThreshold: 10
+  alignmentCooldown: 1
+  realignLargeOffsetImmediately: 1
   reAlignmentIndicator: {fileID: 0}
   indicatorVisibleDuration: 0.75
   statusText: {fileID: 572194327}

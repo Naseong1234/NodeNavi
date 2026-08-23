@@ -15,6 +15,7 @@ public class sh_MarkerRouteController : MonoBehaviour
     [SerializeField] private Transform buildingContentRoot;
     [SerializeField] private Transform routeContentRoot;
     [SerializeField] private List<sh_MarkerRouteData> markerRoutes = new List<sh_MarkerRouteData>(RequiredMarkerCount);
+    [SerializeField] private int requestedMaxMovingImages = RequiredMarkerCount;
 
     [Header("1번 마커 선택 UI")]
     [SerializeField] private string selectionMarkerName = "Marker_01";
@@ -35,10 +36,14 @@ public class sh_MarkerRouteController : MonoBehaviour
     [SerializeField] private bool useSmoothInterpolation = true;
     [SerializeField] private float interpolationSpeed = 10f;
     [SerializeField] private float poseStableDuration = 0.3f;
-    [SerializeField] private float minPositionThreshold = 0.005f;
-    [SerializeField] private float minRotationThreshold = 0.5f;
-    [SerializeField] private float largePositionThreshold = 0.15f;
-    [SerializeField] private float largeRotationThreshold = 10f;
+    [SerializeField] private float minPositionThreshold = 0.05f;
+    [SerializeField] private float minRotationThreshold = 3f;
+    [SerializeField] private float largePositionThreshold = 0.35f;
+    [SerializeField] private float largeRotationThreshold = 25f;
+    [Tooltip("일반 재정렬은 이 시간 간격 이상 지났을 때만 실행합니다.")]
+    [SerializeField] private float alignmentCooldown = 1f;
+    [Tooltip("큰 오차가 감지되면 재정렬 쿨타임을 기다리지 않고 즉시 보정합니다.")]
+    [SerializeField] private bool realignLargeOffsetImmediately = true;
     [SerializeField] private GameObject reAlignmentIndicator;
     [SerializeField] private float indicatorVisibleDuration = 0.75f;
 
@@ -61,11 +66,8 @@ public class sh_MarkerRouteController : MonoBehaviour
     private bool hasConfirmedPathSelection;
     private Coroutine alignmentCoroutine;
     private string currentReferenceMarkerName;
-    private string pendingMarkerName;
-    private Vector3 pendingMarkerPosition;
-    private Quaternion pendingMarkerRotation;
-    private float pendingMarkerStableUntil;
     private float indicatorHideAtTime;
+    private float nextAlignmentAllowedTime;
     private sh_PCPathOption currentPathOption = sh_PCPathOption.None;
     private int currentVisibleRouteOrder = -1;
 
@@ -74,6 +76,7 @@ public class sh_MarkerRouteController : MonoBehaviour
 
     private void Awake()
     {
+        ConfigureTrackedImageManager();
         InitializeRoutePool();
         HidePCSelectionPanel();
         RefreshSelectionStateText();
@@ -82,6 +85,7 @@ public class sh_MarkerRouteController : MonoBehaviour
 
     private void OnEnable()
     {
+        ConfigureTrackedImageManager();
         SubscribeTrackedImageEvents();
     }
 
@@ -244,6 +248,19 @@ public class sh_MarkerRouteController : MonoBehaviour
         return true;
     }
 
+    private void ConfigureTrackedImageManager()
+    {
+        if (trackedImageManager == null)
+            return;
+
+        int targetCount = Mathf.Clamp(requestedMaxMovingImages, 1, RequiredMarkerCount);
+        if (trackedImageManager.requestedMaxNumberOfMovingImages == targetCount)
+            return;
+
+        trackedImageManager.requestedMaxNumberOfMovingImages = targetCount;
+        Debug.Log($"[sh_MarkerRouteController] AR Tracked Image Manager 최대 동시 추적 수를 {targetCount}로 설정했습니다.", this);
+    }
+
     private void SubscribeTrackedImageEvents()
     {
         if (isSubscribed || trackedImageManager == null)
@@ -264,8 +281,10 @@ public class sh_MarkerRouteController : MonoBehaviour
 
     private void OnTrackedImagesChanged(ARTrackedImagesChangedEventArgs eventArgs)
     {
-        if (TrySelectTrackedImage(eventArgs.updated, out ARTrackedImage trackedImage) ||
-            TrySelectTrackedImage(eventArgs.added, out trackedImage))
+        if (TrySelectTrackedImage(eventArgs.added, true, out ARTrackedImage trackedImage) ||
+            TrySelectTrackedImage(eventArgs.updated, true, out trackedImage) ||
+            TrySelectTrackedImage(eventArgs.updated, false, out trackedImage) ||
+            TrySelectTrackedImage(eventArgs.added, false, out trackedImage))
         {
             HandleTrackedImage(trackedImage);
             return;
@@ -280,7 +299,10 @@ public class sh_MarkerRouteController : MonoBehaviour
         SetStatusMessage(waitingMessage);
     }
 
-    private bool TrySelectTrackedImage(IReadOnlyList<ARTrackedImage> trackedImages, out ARTrackedImage selectedTrackedImage)
+    private bool TrySelectTrackedImage(
+        IReadOnlyList<ARTrackedImage> trackedImages,
+        bool preferDifferentMarker,
+        out ARTrackedImage selectedTrackedImage)
     {
         selectedTrackedImage = null;
 
@@ -293,17 +315,23 @@ public class sh_MarkerRouteController : MonoBehaviour
             if (trackedImage == null || trackedImage.trackingState != TrackingState.Tracking)
                 continue;
 
-            if (trackedImage.referenceImage.name == currentReferenceMarkerName)
+            bool isCurrentMarker = trackedImage.referenceImage.name == currentReferenceMarkerName;
+            if (preferDifferentMarker)
+            {
+                if (!isCurrentMarker)
+                {
+                    selectedTrackedImage = trackedImage;
+                    return true;
+                }
+            }
+            else if (isCurrentMarker)
             {
                 selectedTrackedImage = trackedImage;
                 return true;
             }
-
-            if (selectedTrackedImage == null)
-                selectedTrackedImage = trackedImage;
         }
 
-        return selectedTrackedImage != null;
+        return false;
     }
 
     private void HandleTrackedImage(ARTrackedImage trackedImage)
@@ -325,43 +353,18 @@ public class sh_MarkerRouteController : MonoBehaviour
 
         if (markerName == currentReferenceMarkerName)
         {
-            pendingMarkerName = null;
-            if (AlignBuildingContentRoot(trackedImage.transform, routeData))
-                UpdateRouteAndUIForMarker(routeData);
-            else
-                UpdateStatusForMarker(routeData);
-
-            return;
-        }
-
-        if (pendingMarkerName != markerName)
-        {
-            pendingMarkerName = markerName;
-            pendingMarkerPosition = trackedImage.transform.position;
-            pendingMarkerRotation = trackedImage.transform.rotation;
-            pendingMarkerStableUntil = Time.time + poseStableDuration;
-            return;
-        }
-
-        if (Vector3.Distance(pendingMarkerPosition, trackedImage.transform.position) > minPositionThreshold ||
-            Quaternion.Angle(pendingMarkerRotation, trackedImage.transform.rotation) > minRotationThreshold)
-        {
-            pendingMarkerPosition = trackedImage.transform.position;
-            pendingMarkerRotation = trackedImage.transform.rotation;
-            pendingMarkerStableUntil = Time.time + poseStableDuration;
-            return;
-        }
-
-        if (Time.time < pendingMarkerStableUntil)
-            return;
-
-        pendingMarkerName = null;
-
-        if (AlignBuildingContentRoot(trackedImage.transform, routeData))
-        {
-            currentReferenceMarkerName = markerName;
+            AlignBuildingContentRoot(trackedImage.transform, routeData);
             UpdateRouteAndUIForMarker(routeData);
+
+            return;
         }
+
+        AlignBuildingContentRoot(trackedImage.transform, routeData);
+        currentReferenceMarkerName = markerName;
+        UpdateRouteAndUIForMarker(routeData);
+
+        if (markerName != selectionMarkerName && routeData.RouteOrder > 0)
+            SetStatusMessage(GetCurrentSuccessMessage());
     }
 
     private void UpdateRouteAndUIForMarker(sh_MarkerRouteData routeData)
@@ -546,6 +549,7 @@ public class sh_MarkerRouteController : MonoBehaviour
         {
             buildingContentRoot.SetPositionAndRotation(targetRootPosition, targetRootRotation);
             hasAlignedBuildingRoot = true;
+            nextAlignmentAllowedTime = Time.time + alignmentCooldown;
             Debug.Log($"[sh_MarkerRouteController] 첫 마커 기반 좌표계 정렬 완료: {routeData.MarkerName}", buildingContentRoot.gameObject);
             return true;
         }
@@ -558,6 +562,9 @@ public class sh_MarkerRouteController : MonoBehaviour
 
         if (posDiff >= largePositionThreshold || rotDiff >= largeRotationThreshold)
         {
+            if (!realignLargeOffsetImmediately && Time.time < nextAlignmentAllowedTime)
+                return false;
+
             if (alignmentCoroutine != null)
             {
                 StopCoroutine(alignmentCoroutine);
@@ -565,10 +572,16 @@ public class sh_MarkerRouteController : MonoBehaviour
             }
 
             buildingContentRoot.SetPositionAndRotation(targetRootPosition, targetRootRotation);
+            nextAlignmentAllowedTime = Time.time + alignmentCooldown;
             ShowReAlignmentIndicator();
             Debug.Log($"[sh_MarkerRouteController] 큰 오차 재정렬 완료: {routeData.MarkerName} (이동 거리: {posDiff:F3}m, 회전 각도: {rotDiff:F1}°)", buildingContentRoot.gameObject);
             return true;
         }
+
+        if (Time.time < nextAlignmentAllowedTime)
+            return false;
+
+        nextAlignmentAllowedTime = Time.time + alignmentCooldown;
 
         if (alignmentCoroutine != null)
             StopCoroutine(alignmentCoroutine);
