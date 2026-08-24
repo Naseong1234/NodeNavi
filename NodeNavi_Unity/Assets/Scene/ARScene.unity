@@ -1879,6 +1879,8 @@ MonoBehaviour:
   largeRotationThreshold: 10
   alignmentCooldown: 1
   realignLargeOffsetImmediately: 1
+  lockAlignmentAfterFirstRecognition: 1
+  lockBuildingPoseAfterSelectionMarkerRecognition: 1
   reAlignmentIndicator: {fileID: 0}
   indicatorVisibleDuration: 0.75
   statusText: {fileID: 572194327}

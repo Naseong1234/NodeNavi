@@ -44,6 +44,10 @@ public class sh_MarkerRouteController : MonoBehaviour
     [SerializeField] private float alignmentCooldown = 1f;
     [Tooltip("큰 오차가 감지되면 재정렬 쿨타임을 기다리지 않고 즉시 보정합니다.")]
     [SerializeField] private bool realignLargeOffsetImmediately = true;
+    [Tooltip("If enabled, the building/root transform is fixed after the first tracked marker alignment.")]
+    [SerializeField] private bool lockAlignmentAfterFirstRecognition = true;
+    [Tooltip("If enabled, BuildingContentRoot position and rotation are fixed when marker 1 is first recognized.")]
+    [SerializeField] private bool lockBuildingPoseAfterSelectionMarkerRecognition = true;
     [SerializeField] private GameObject reAlignmentIndicator;
     [SerializeField] private float indicatorVisibleDuration = 0.75f;
 
@@ -68,8 +72,12 @@ public class sh_MarkerRouteController : MonoBehaviour
     private bool hasRecognizedAnyMarker;
     private bool hasConfirmedPathSelection;
     private bool hasReachedDestination;
+    private bool isAlignmentLocked;
+    private bool hasLockedBuildingPose;
     private Coroutine alignmentCoroutine;
     private string currentReferenceMarkerName;
+    private Vector3 lockedBuildingPosition;
+    private Quaternion lockedBuildingRotation;
     private float indicatorHideAtTime;
     private float nextAlignmentAllowedTime;
     private sh_PCPathOption currentPathOption = sh_PCPathOption.None;
@@ -100,6 +108,15 @@ public class sh_MarkerRouteController : MonoBehaviour
 
     private void Update()
     {
+        if (hasLockedBuildingPose && buildingContentRoot != null)
+        {
+            if (Vector3.Distance(buildingContentRoot.position, lockedBuildingPosition) > 0.001f ||
+                Quaternion.Angle(buildingContentRoot.rotation, lockedBuildingRotation) > 0.01f)
+            {
+                buildingContentRoot.SetPositionAndRotation(lockedBuildingPosition, lockedBuildingRotation);
+            }
+        }
+
         if (reAlignmentIndicator != null &&
             reAlignmentIndicator.activeSelf &&
             Time.time >= indicatorHideAtTime)
@@ -345,8 +362,26 @@ public class sh_MarkerRouteController : MonoBehaviour
 
         if (!hasAlignedBuildingRoot)
         {
-            AlignBuildingContentRoot(trackedImage.transform, routeData);
+            if (markerName != selectionMarkerName)
+            {
+                SetStatusMessage(selectionRequiredMessage);
+                return;
+            }
+
+            bool didAlign = AlignBuildingContentRoot(trackedImage.transform, routeData);
             currentReferenceMarkerName = markerName;
+            isAlignmentLocked = lockAlignmentAfterFirstRecognition && didAlign;
+            if (didAlign && lockBuildingPoseAfterSelectionMarkerRecognition)
+                LockBuildingPoseAtSelectionMarkerRecognition();
+            UpdateRouteAndUIForMarker(routeData);
+            return;
+        }
+
+        if (isAlignmentLocked)
+        {
+            if (markerName != currentReferenceMarkerName)
+                currentReferenceMarkerName = markerName;
+
             UpdateRouteAndUIForMarker(routeData);
             return;
         }
@@ -487,6 +522,26 @@ public class sh_MarkerRouteController : MonoBehaviour
         RefreshSelectionStateText();
         SetStatusMessage(selectionPromptMessage);
         UpdateLiveRoutePreview();
+    }
+
+    private void LockBuildingPoseAtSelectionMarkerRecognition()
+    {
+        if (buildingContentRoot == null)
+            return;
+
+        if (alignmentCoroutine != null)
+        {
+            StopCoroutine(alignmentCoroutine);
+            alignmentCoroutine = null;
+        }
+
+        lockedBuildingPosition = buildingContentRoot.position;
+        lockedBuildingRotation = buildingContentRoot.rotation;
+        hasLockedBuildingPose = true;
+        isAlignmentLocked = true;
+        buildingContentRoot.SetPositionAndRotation(lockedBuildingPosition, lockedBuildingRotation);
+
+        Debug.Log("[sh_MarkerRouteController] Marker 1 fixed BuildingContentRoot position and rotation.", buildingContentRoot.gameObject);
     }
 
     private void UpdateLiveRoutePreview()
