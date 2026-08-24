@@ -53,8 +53,10 @@ public class sh_MarkerRouteController : MonoBehaviour
     [SerializeField] private string successMessage = "경로를 표시했습니다";
     [SerializeField] private string reAligningMessage = "위치를 재정렬하고 있습니다";
     [SerializeField] private string selectionPromptMessage = "확인할 PC를 선택해 주세요";
-    [SerializeField] private string selectionCompletedMessage = "선택한 PC 경로를 표시합니다";
+    [SerializeField] private string selectionCompletedMessage = "선택한 PC의 안내 경로를 따라가세요.";
     [SerializeField] private string selectionRequiredMessage = "먼저 1번 마커에서 PC를 선택해 주세요";
+    [SerializeField] private int destinationRouteOrder = 2;
+    [SerializeField] private string destinationReachedMessage = "목적지에 도착 하였습니다. 장비옆 안내 창을 확인하세요.";
 
     [Header("에디터 테스트")]
     [SerializeField] private int editorTestRouteOrder;
@@ -63,7 +65,9 @@ public class sh_MarkerRouteController : MonoBehaviour
     private bool isSubscribed;
     private bool isInitialized;
     private bool hasAlignedBuildingRoot;
+    private bool hasRecognizedAnyMarker;
     private bool hasConfirmedPathSelection;
+    private bool hasReachedDestination;
     private Coroutine alignmentCoroutine;
     private string currentReferenceMarkerName;
     private float indicatorHideAtTime;
@@ -290,13 +294,7 @@ public class sh_MarkerRouteController : MonoBehaviour
             return;
         }
 
-        if (!hasConfirmedPathSelection && pcSelectionPanel != null && pcSelectionPanel.activeSelf)
-        {
-            SetStatusMessage(selectionPromptMessage);
-            return;
-        }
-
-        SetStatusMessage(waitingMessage);
+        SetStatusMessage(GetDefaultStatusMessage());
     }
 
     private bool TrySelectTrackedImage(
@@ -343,6 +341,8 @@ public class sh_MarkerRouteController : MonoBehaviour
             return;
         }
 
+        hasRecognizedAnyMarker = true;
+
         if (!hasAlignedBuildingRoot)
         {
             AlignBuildingContentRoot(trackedImage.transform, routeData);
@@ -364,7 +364,7 @@ public class sh_MarkerRouteController : MonoBehaviour
         UpdateRouteAndUIForMarker(routeData);
 
         if (markerName != selectionMarkerName && routeData.RouteOrder > 0)
-            SetStatusMessage(GetCurrentSuccessMessage());
+            SetStatusMessage(GetDefaultStatusMessage());
     }
 
     private void UpdateRouteAndUIForMarker(sh_MarkerRouteData routeData)
@@ -374,6 +374,23 @@ public class sh_MarkerRouteController : MonoBehaviour
 
         currentVisibleRouteOrder = routeData.RouteOrder;
         bool isSelectionMarker = routeData.MarkerName == selectionMarkerName || routeData.RouteOrder == 0;
+        if (routeData.RouteOrder == destinationRouteOrder)
+        {
+            if (hasConfirmedPathSelection)
+            {
+                HidePCSelectionPanel();
+                SetActiveRoutes(routeData.RouteOrder);
+            }
+            else
+            {
+                HideAllRoutes();
+            }
+
+            hasReachedDestination = true;
+            SetStatusMessage(destinationReachedMessage);
+            return;
+        }
+
         if (isSelectionMarker)
         {
             ShowPCSelectionPanel();
@@ -388,13 +405,13 @@ public class sh_MarkerRouteController : MonoBehaviour
         if (!hasConfirmedPathSelection)
         {
             HideAllRoutes();
-            SetStatusMessage(selectionRequiredMessage);
+            SetStatusMessage(GetDefaultStatusMessage());
             return;
         }
 
         HidePCSelectionPanel();
         SetActiveRoutes(routeData.RouteOrder);
-        SetStatusMessage(selectionCompletedMessage);
+        SetStatusMessage(GetStatusMessageForRoute(routeData.RouteOrder));
     }
 
     private void UpdateStatusForMarker(sh_MarkerRouteData routeData)
@@ -403,6 +420,13 @@ public class sh_MarkerRouteController : MonoBehaviour
             return;
 
         bool isSelectionMarker = routeData.MarkerName == selectionMarkerName || routeData.RouteOrder == 0;
+        if (routeData.RouteOrder == destinationRouteOrder)
+        {
+            hasReachedDestination = true;
+            SetStatusMessage(destinationReachedMessage);
+            return;
+        }
+
         if (isSelectionMarker && !hasConfirmedPathSelection)
         {
             SetStatusMessage(selectionPromptMessage);
@@ -411,7 +435,7 @@ public class sh_MarkerRouteController : MonoBehaviour
 
         if (!hasConfirmedPathSelection && routeData.RouteOrder > 0)
         {
-            SetStatusMessage(selectionRequiredMessage);
+            SetStatusMessage(GetDefaultStatusMessage());
             return;
         }
 
@@ -442,17 +466,18 @@ public class sh_MarkerRouteController : MonoBehaviour
         if (currentVisibleRouteOrder >= 0)
             SetActiveRoutes(currentVisibleRouteOrder);
 
-        SetStatusMessage(selectionCompletedMessage);
+        SetStatusMessage(GetStatusMessageForRoute(currentVisibleRouteOrder));
     }
 
     public void ResetPCSelection()
     {
         hasConfirmedPathSelection = false;
+        hasReachedDestination = false;
         currentPathOption = sh_PCPathOption.None;
         currentVisibleRouteOrder = -1;
         RefreshSelectionStateText();
         HideAllRoutes();
-        SetStatusMessage(waitingMessage);
+        SetStatusMessage(GetDefaultStatusMessage());
     }
 
     private void SetCurrentPathOption(sh_PCPathOption pathOption)
@@ -506,7 +531,41 @@ public class sh_MarkerRouteController : MonoBehaviour
 
     private string GetCurrentSuccessMessage()
     {
-        return hasConfirmedPathSelection ? selectionCompletedMessage : successMessage;
+        if (!hasConfirmedPathSelection)
+            return GetDefaultStatusMessage();
+
+        return GetStatusMessageForRoute(currentVisibleRouteOrder);
+    }
+
+    private string GetDefaultStatusMessage()
+    {
+        if (hasReachedDestination)
+            return destinationReachedMessage;
+
+        if (!hasRecognizedAnyMarker)
+            return waitingMessage;
+
+        if (hasConfirmedPathSelection)
+            return selectionCompletedMessage;
+
+        if (currentPathOption != sh_PCPathOption.None)
+            return selectionPromptMessage;
+
+        if (pcSelectionPanel != null && pcSelectionPanel.activeSelf)
+            return selectionPromptMessage;
+
+        return selectionPromptMessage;
+    }
+
+    private string GetStatusMessageForRoute(int routeOrder)
+    {
+        if (routeOrder == destinationRouteOrder)
+        {
+            hasReachedDestination = true;
+            return destinationReachedMessage;
+        }
+
+        return selectionCompletedMessage;
     }
 
     private void ShowPCSelectionPanel()
@@ -769,6 +828,9 @@ public class sh_MarkerRouteController : MonoBehaviour
     private void SetStatusMessage(string message)
     {
         if (statusText == null)
+            return;
+
+        if (hasReachedDestination && message != destinationReachedMessage)
             return;
 
         statusText.text = message;
