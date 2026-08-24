@@ -497,7 +497,10 @@ public class sh_MarkerRouteController : MonoBehaviour
             if (routeData.RouteOrder != routeOrder)
                 continue;
 
-            SetRouteInstancesActive(routeData, currentPathOption != sh_PCPathOption.None);
+            if (routeOrder == 0 && !hasConfirmedPathSelection)
+                SetSelectedPCRouteOnly(routeData);
+            else
+                SetRouteInstancesActive(routeData, currentPathOption != sh_PCPathOption.None);
         }
     }
 
@@ -670,6 +673,16 @@ public class sh_MarkerRouteController : MonoBehaviour
             bothInstance.SetActive(true);
 
         if (!includeSelectedPC || currentPathOption == sh_PCPathOption.None)
+            return;
+
+        GameObject selectedInstance = routeData.GetRuntimeInstance(currentPathOption);
+        if (selectedInstance != null)
+            selectedInstance.SetActive(true);
+    }
+
+    private void SetSelectedPCRouteOnly(sh_MarkerRouteData routeData)
+    {
+        if (routeData == null || currentPathOption == sh_PCPathOption.None)
             return;
 
         GameObject selectedInstance = routeData.GetRuntimeInstance(currentPathOption);
