@@ -62,10 +62,6 @@ public class sh_MarkerRouteController : MonoBehaviour
     [SerializeField] private int destinationRouteOrder = 2;
     [SerializeField] private string destinationReachedMessage = "목적지에 도착 하였습니다. 장비옆 안내 창을 확인하세요.";
 
-    [Header("에디터 테스트")]
-    [SerializeField] private int editorTestRouteOrder;
-    [SerializeField] private sh_PCPathOption editorTestPathOption = sh_PCPathOption.PC1;
-
     private bool isSubscribed;
     private bool isInitialized;
     private bool hasAlignedBuildingRoot;
@@ -841,42 +837,6 @@ public class sh_MarkerRouteController : MonoBehaviour
                 selectionStateText.text = noSelectionLabel;
                 break;
         }
-    }
-
-    [ContextMenu("Test/Run Editor Route & Alignment Test")]
-    public void RunEditorRouteOrderTest()
-    {
-        if (!isInitialized)
-            InitializeRoutePool();
-
-        if (editorTestRouteOrder < 0 || editorTestRouteOrder >= markerRoutes.Count)
-        {
-            Debug.LogWarning($"[sh_MarkerRouteController] 유효하지 않은 editorTestRouteOrder입니다: {editorTestRouteOrder}", this);
-            return;
-        }
-
-        sh_MarkerRouteData targetRoute = markerRoutes.Find(route => route.RouteOrder == editorTestRouteOrder);
-        if (targetRoute == null)
-        {
-            Debug.LogWarning($"[sh_MarkerRouteController] routeOrder={editorTestRouteOrder} 데이터를 찾지 못했습니다.", this);
-            return;
-        }
-
-        if (targetRoute.KnownMarkerTransform != null)
-        {
-            GameObject dummyTrackedImage = new GameObject("Temp_Editor_TrackedMarker");
-            dummyTrackedImage.transform.position = new Vector3(0f, 1.5f, 1.0f);
-            dummyTrackedImage.transform.rotation = Quaternion.identity;
-
-            AlignBuildingContentRoot(dummyTrackedImage.transform, targetRoute);
-            DestroyImmediate(dummyTrackedImage);
-        }
-
-        currentPathOption = editorTestRouteOrder == 0 ? currentPathOption : editorTestPathOption;
-        hasConfirmedPathSelection = editorTestRouteOrder == 0 || currentPathOption != sh_PCPathOption.None;
-        RefreshSelectionStateText();
-        SetActiveRoutes(editorTestRouteOrder);
-        Debug.Log($"[sh_MarkerRouteController] [Editor 테스트] RouteOrder={editorTestRouteOrder}, 선택 경로={currentPathOption} 선로 활성화 및 가상 정렬 완료", this);
     }
 
     private bool TryGetRouteData(string markerName, out sh_MarkerRouteData routeData)
