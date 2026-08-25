@@ -1063,7 +1063,6 @@ MonoBehaviour:
   indicatorVisibleDuration: 0.75
   statusText: {fileID: 572194327}
   waitingMessage: "\uB9C8\uCEE4\uB97C \uBE44\uCDB0 \uC8FC\uC138\uC694"
-  successMessage: "\uACBD\uB85C\uB97C \uD45C\uC2DC\uD588\uC2B5\uB2C8\uB2E4"
   reAligningMessage: "\uC704\uCE58\uB97C \uC7AC\uC815\uB82C\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4"
   selectionPromptMessage: "\uD655\uC778\uD560 PC\uB97C \uC120\uD0DD\uD574 \uC8FC\uC138\uC694"
   selectionCompletedMessage: "\uC120\uD0DD\uD55C PC\uC758 \uC548\uB0B4 \uACBD\uB85C\uB97C

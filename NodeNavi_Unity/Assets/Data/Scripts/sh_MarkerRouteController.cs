@@ -54,7 +54,6 @@ public class sh_MarkerRouteController : MonoBehaviour
     [Header("상태 안내 UI")]
     [SerializeField] private TMP_Text statusText;
     [SerializeField] private string waitingMessage = "마커를 비춰 주세요";
-    [SerializeField] private string successMessage = "경로를 표시했습니다";
     [SerializeField] private string reAligningMessage = "위치를 재정렬하고 있습니다";
     [SerializeField] private string selectionPromptMessage = "확인할 PC를 선택해 주세요";
     [SerializeField] private string selectionCompletedMessage = "선택한 PC의 안내 경로를 따라가세요.";
@@ -140,7 +139,6 @@ public class sh_MarkerRouteController : MonoBehaviour
         }
 
         isInitialized = true;
-        Debug.Log($"[sh_MarkerRouteController] 마커 {markerRoutes.Count}개 로컬 좌표 캐싱 완료 및 PC별 경로 prefab 풀링 준비 완료.", this);
     }
 
     private void CreateRuntimeInstance(sh_MarkerRouteData routeData, sh_PCPathOption pathOption)
@@ -275,7 +273,6 @@ public class sh_MarkerRouteController : MonoBehaviour
             return;
 
         trackedImageManager.requestedMaxNumberOfMovingImages = targetCount;
-        Debug.Log($"[sh_MarkerRouteController] AR Tracked Image Manager 최대 동시 추적 수를 {targetCount}로 설정했습니다.", this);
     }
 
     private void SubscribeTrackedImageEvents()
@@ -537,7 +534,6 @@ public class sh_MarkerRouteController : MonoBehaviour
         isAlignmentLocked = true;
         buildingContentRoot.SetPositionAndRotation(lockedBuildingPosition, lockedBuildingRotation);
 
-        Debug.Log("[sh_MarkerRouteController] Marker 1 fixed BuildingContentRoot position and rotation.", buildingContentRoot.gameObject);
     }
 
     private void UpdateLiveRoutePreview()
@@ -663,7 +659,6 @@ public class sh_MarkerRouteController : MonoBehaviour
             buildingContentRoot.SetPositionAndRotation(targetRootPosition, targetRootRotation);
             hasAlignedBuildingRoot = true;
             nextAlignmentAllowedTime = Time.time + alignmentCooldown;
-            Debug.Log($"[sh_MarkerRouteController] 첫 마커 기반 좌표계 정렬 완료: {routeData.MarkerName}", buildingContentRoot.gameObject);
             return true;
         }
 
@@ -687,7 +682,6 @@ public class sh_MarkerRouteController : MonoBehaviour
             buildingContentRoot.SetPositionAndRotation(targetRootPosition, targetRootRotation);
             nextAlignmentAllowedTime = Time.time + alignmentCooldown;
             ShowReAlignmentIndicator();
-            Debug.Log($"[sh_MarkerRouteController] 큰 오차 재정렬 완료: {routeData.MarkerName} (이동 거리: {posDiff:F3}m, 회전 각도: {rotDiff:F1}°)", buildingContentRoot.gameObject);
             return true;
         }
 
@@ -704,7 +698,6 @@ public class sh_MarkerRouteController : MonoBehaviour
         else
             buildingContentRoot.SetPositionAndRotation(targetRootPosition, targetRootRotation);
 
-        Debug.Log($"[sh_MarkerRouteController] 마커 재정렬 완료: {routeData.MarkerName} (이동 거리: {posDiff:F3}m, 회전 각도: {rotDiff:F1}°)", buildingContentRoot.gameObject);
         return true;
     }
 
