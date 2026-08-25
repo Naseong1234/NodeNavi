@@ -782,16 +782,30 @@ public class sh_MarkerRouteController : MonoBehaviour
         if (routeData == null)
             return;
 
-        GameObject bothInstance = routeData.GetRuntimeInstance(sh_PCPathOption.None);
+        // 목적지 마커를 포함해 어떤 경로가 먼저 인식되더라도 필요한 인스턴스를 보장합니다.
+        GameObject bothInstance = GetOrCreateRuntimeInstance(routeData, sh_PCPathOption.None);
         if (bothInstance != null)
             bothInstance.SetActive(true);
 
         if (!includeSelectedPC || currentPathOption == sh_PCPathOption.None)
             return;
 
-        GameObject selectedInstance = routeData.GetRuntimeInstance(currentPathOption);
+        GameObject selectedInstance = GetOrCreateRuntimeInstance(routeData, currentPathOption);
         if (selectedInstance != null)
             selectedInstance.SetActive(true);
+    }
+
+    private GameObject GetOrCreateRuntimeInstance(sh_MarkerRouteData routeData, sh_PCPathOption pathOption)
+    {
+        GameObject runtimeInstance = routeData.GetRuntimeInstance(pathOption);
+        if (runtimeInstance != null)
+            return runtimeInstance;
+
+        if (routeData.GetPrefabForOption(pathOption) == null)
+            return null;
+
+        CreateRuntimeInstance(routeData, pathOption);
+        return routeData.GetRuntimeInstance(pathOption);
     }
 
     private void SetSelectedPCRouteOnly(sh_MarkerRouteData routeData)
